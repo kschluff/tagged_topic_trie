@@ -36,16 +36,24 @@ defmodule TaggedTopicTrie do
   end
 
   defp do_find_wildcard_topic(node, [], found) do
-    Enum.concat(found, MapSet.to_list(node.clients))
+    Enum.concat(found, node.clients)
   end
 
   defp do_find_wildcard_topic(node, [h | t], found) do
     found =
-      case Map.get(node.children, "*") do
+      case Map.get(node.children, "+") do
         nil -> found
-        child -> do_find_wildcard_topic(child, t, found)
+        child ->
+              do_find_wildcard_topic(child, t, found)
       end
 
+    found =
+      case Map.get(node.children, "#") do
+        nil -> found
+        child ->
+          Enum.concat(found, child.clients)
+      end
+    
     case Map.get(node.children, h) do
       nil -> found
       child -> do_find_wildcard_topic(child, t, found)
@@ -72,11 +80,25 @@ defmodule TaggedTopicTrie do
 
   defp do_find_tagged_topic(node, [h | t], tags, found) do
     found =
-      case Map.get(node.children, "*") do
+      case Map.get(node.children, "+") do
         nil -> found
-        child -> do_find_tagged_topic(child, t, tags, found)
+        child ->
+              do_find_tagged_topic(child, t, tags, found)
       end
-
+    
+    found =
+      case Map.get(node.children, "#") do
+        nil -> found
+        child ->
+          Enum.reduce(child.clients, found, fn {client, client_tags}, result ->
+            if MapSet.subset?(client_tags, tags) do
+              [client | result]
+            else
+              result
+            end
+          end)
+      end
+    
     case Map.get(node.children, h) do
       nil -> found
       child -> do_find_tagged_topic(child, t, tags, found)

@@ -51,13 +51,13 @@ t =
 ["client1", "client2"] = TaggedTopicTrie.find_topic(t, path) |> Enum.sort() 
 ```
 
-Clients can be inserted and retrieved using wilcard topics.  The '*' wildcard will match a single level in the path, unless it is the last level.  In the last position, the wildcard will match all following levels.
+Clients can be inserted and retrieved using MQTT-style wildcard topics.  The '+' wildcard will match a single level in the path.  In the last position, the '#' wildcard will match all following levels.
 
 ```elixir
 t = 
     TaggedTopicTrie.new()
-    |> TaggedTopicTrie.insert("building/floor1/*/temperature", "client1")
-    |> TaggedTopicTrie.insert("building/floor1/room1/*", "client2")
+    |> TaggedTopicTrie.insert("building/floor1/+/temperature", "client1")
+    |> TaggedTopicTrie.insert("building/floor1/room1/#", "client2")
 
 ["client1", "client2"] = 
   TaggedTopicTrie.find_wildcard_topic(t, "building/floor1/room1/temperature") |> Enum.sort()
@@ -70,9 +70,9 @@ Topics can be further filtered by tags.  The `find_tagged_topic` function will m
 ```elixir
 t = 
     TaggedTopicTrie.new()
-    |> TaggedTopicTrie.insert("building/floor1/*/temperature", [:group1], "client1")
-    |> TaggedTopicTrie.insert("building/floor1/*/temperature", [:group2], "client2")
-    |> TaggedTopicTrie.insert("building/floor1/room1/*", [], "client3")
+    |> TaggedTopicTrie.insert("building/floor1/+/temperature", [:group1], "client1")
+    |> TaggedTopicTrie.insert("building/floor1/+/temperature", [:group2], "client2")
+    |> TaggedTopicTrie.insert("building/floor1/room1/+", [], "client3")
 
 ["client1", "client3"] = 
   TaggedTopicTrie.find_tagged_topic(t, "building/floor1/room1/temperature", [:group1])
@@ -98,23 +98,23 @@ defmodule SimplePubSub do
   end
 
   def subscribe(topic, tags) do
-    GenServer.call(__MODULE__, {:subscribe, topic, tags})
+    GenServer.call(__MODULE__, {:subscribe, self(), topic, tags})
   end
 
   def unsubscribe(topic, tags) do
-    GenServer.call(__MODULE__, {:unsubscribe, topic, tags})
+    GenServer.call(__MODULE__, {:unsubscribe, self(), topic, tags})
   end
 
   def publish(topic, tags, message) do
     GenServer.cast(__MODULE__, {:publish, topic, tags, message})
   end
 
-  def handle_call({:subscribe, topic, tags}, {pid, _}, state) do
+  def handle_call({:subscribe, pid, topic, tags}, _from, state) do
     state = TaggedTopicTrie.insert(state, topic, tags, pid)
     {:reply, :ok, state}
   end
 
-  def handle_call({:unsubscribe, topic, tags}, {pid, _}, state) do
+  def handle_call({:unsubscribe, pid, topic, tags}, _from, state) do
     state = TaggedTopicTrie.remove(state, topic, tags, pid)
     {:reply, :ok, state}
   end
